@@ -1,5 +1,6 @@
 SRC_DIR = src
 BIN_DIR = bin
+BUF_DIR = rxbuffer_files
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall -O2
 
@@ -26,8 +27,9 @@ $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	if exist $(BIN_DIR)\*.o del /Q $(BIN_DIR)\*.o
-	if exist $(SRC_DIR)\*.txt del /Q $(SRC_DIR)\*.txt
+	del /Q .\*.exe
+	del /Q $(BIN_DIR)\*.o
+	del /Q $(BUF_DIR)\*.txt
 
 run-base-station:
 	./$(BS_EXEC)

@@ -4,8 +4,8 @@
 
 using namespace std;
 
-static int g_allocCount = 0;
-static int g_allocStart = -1;
+static int allocCount = 0;
+static int allocStart = -1;
 
 int main(int argc, char* argv[])
 {
@@ -17,7 +17,7 @@ int main(int argc, char* argv[])
     int userId=atoi(argv[1]);
     if(userId<0 || userId>3)
 	{
-        cerr<<"User id must be 0..3"<<endl;
+        cerr<<"User id must be 0-3"<<endl;
         return 1;
     }
     string rxFile="rxbuffer_files/user"+to_string(userId)+"_rx_waveform.txt";
@@ -32,8 +32,8 @@ int main(int argc, char* argv[])
         if(rxWave.size()==FFT_SIZE)
 		{
             auto fullFreq = fft(rxWave);
-            vector<std::complex<double>> active(NUM_ACTIVE);
-            for(int i=0; i<NUM_ACTIVE; i++)
+            vector<std::complex<double>> active(FREQ_BINS);
+            for(int i=0; i<FREQ_BINS; i++)
 			{
                 active[i] = fullFreq[i*ACTIVE_BIN_SPACING];
             }
@@ -55,8 +55,8 @@ int main(int argc, char* argv[])
                 int loVal = loPair.first*2 + loPair.second;
                 int s = (hiVal<<2) | loVal;
                 
-                g_allocCount = cnt;
-                g_allocStart = s;
+                allocCount = cnt;
+                allocStart = s;
                 oss<<"Response: allocated "<<cnt<<" bins starting at active bin "<<s;
                 msgQueue.push(oss.str());
             }
@@ -69,9 +69,9 @@ int main(int argc, char* argv[])
 				int sndId = sb.first * 2 + sb.second;
 
 				// Now, decode the payload only from the receiver's allocated bins.
-				// g_allocStart and g_allocCount should have been updated from a previous response.
+				// allocStart and allocCount should have been updated from a previous response.
 				int payload = 0;
-				for (int i = g_allocStart; i < g_allocStart + g_allocCount; i++)
+				for (int i = allocStart; i < allocStart + allocCount; i++)
 				{
 					auto bits = qpskDemodulate(active[i]);
 					int val = bits.first * 2 + bits.second;  // each symbol gives 2 bits
@@ -105,25 +105,25 @@ int main(int argc, char* argv[])
         if(cmd=="req")
 		{
             int n;
-            cout<<"Enter bins requested(1..3): ";
+            cout<<"Enter bins requested(1-3): ";
             cin>>n;
             if(n<1)
 				n=1;
 			if(n>3)
 				n=3;
             vector<complex<double>> fullFreq(FFT_SIZE, {0,0});
-            vector<complex<double>> activeVec(NUM_ACTIVE, {0,0});
+            vector<complex<double>> activeVec(FREQ_BINS, {0,0});
             // active[0] => 00 => Access Request
             activeVec[0] = qpskModulate(0,0);
             // active[1] => userId
             activeVec[1] = qpskModulate((userId>>1)&1, userId&1);
             // active[2] => requested
             activeVec[2] = qpskModulate((n>>1)&1, n&1);
-            for(int i=3; i<NUM_ACTIVE; i++)
+            for(int i=3; i<FREQ_BINS; i++)
 			{
                 activeVec[i] = qpskModulate(0,0);
             }
-            for(int i=0; i<NUM_ACTIVE; i++)
+            for(int i=0; i<FREQ_BINS; i++)
 			{
                 fullFreq[i*ACTIVE_BIN_SPACING] = activeVec[i];
             }
@@ -134,16 +134,16 @@ int main(int argc, char* argv[])
         }
         else if(cmd=="send")
 		{
-            if(g_allocCount<=0)
+            if(allocCount<=0)
 			{
-                cout<<"No bins allocated!\n";
+                cout<<"No bins allocated.\n";
                 continue;
             }
-            int maxBits = 2*g_allocCount;
+            int maxBits = 2*allocCount;
             int maxVal = (1<<maxBits)-1;
-            cout<<"You have "<< g_allocCount <<" bins => can send up to "<< maxBits <<" bits => max int="<<maxVal<<"\n";
+            cout<<"You have "<< allocCount <<" bins => can send up to "<< maxBits <<" bits => max int="<<maxVal<<"\n";
             int dst, pay;
-            cout << "Destination user(0..3)? ";
+            cout << "Destination user(0-3)? ";
             cin >> dst;
             cout << "Payload(0.."<<maxVal<<")? ";
             cin>> pay;
@@ -151,9 +151,9 @@ int main(int argc, char* argv[])
             if(pay>maxVal) pay=maxVal;
             
             vector<complex<double>> fullFreq(FFT_SIZE, {0,0});
-            vector<complex<double>> activeVec(NUM_ACTIVE, {0,0});
+            vector<complex<double>> activeVec(FREQ_BINS, {0,0});
 			
-			for(int i=0; i<NUM_ACTIVE; i++)
+			for(int i=0; i<FREQ_BINS; i++)
 			{
                 activeVec[i] = qpskModulate(0,0);
             }
@@ -165,14 +165,14 @@ int main(int argc, char* argv[])
             // active[2] => sender
             activeVec[2] = qpskModulate((userId>>1)&1, userId&1);
             // place payload in allocated bins
-            for(int i=0; i<g_allocCount; i++)
+            for(int i=0; i<allocCount; i++)
 			{
-                int shift = 2*(g_allocCount -1 - i);
+                int shift = 2*(allocCount -1 - i);
                 int bits = (pay>>shift) & 0x3;
-                activeVec[g_allocStart + i] = qpskModulate((bits>>1)&1, bits&1);
+                activeVec[allocStart + i] = qpskModulate((bits>>1)&1, bits&1);
 			}
 			
-            for(int i=0; i<NUM_ACTIVE; i++)
+            for(int i=0; i<FREQ_BINS; i++)
 			{
                 fullFreq[i*ACTIVE_BIN_SPACING] = activeVec[i];
             }
@@ -185,14 +185,14 @@ int main(int argc, char* argv[])
 		{
             // send a deallocate command => 11
             vector<complex<double>> fullFreq(FFT_SIZE, {0,0});
-            vector<complex<double>> activeVec(NUM_ACTIVE, {0,0});
+            vector<complex<double>> activeVec(FREQ_BINS, {0,0});
             activeVec[0] = qpskModulate(1,1); // 11 => Dealloc
             activeVec[1] = qpskModulate((userId>>1)&1, userId&1);
-            for(int i=2; i<NUM_ACTIVE; i++)
+            for(int i=2; i<FREQ_BINS; i++)
 			{
                 activeVec[i] = qpskModulate(0,0);
             }
-            for(int i=0; i<NUM_ACTIVE; i++)
+            for(int i=0; i<FREQ_BINS; i++)
 			{
                 fullFreq[i*ACTIVE_BIN_SPACING] = activeVec[i];
             }

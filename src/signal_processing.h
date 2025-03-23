@@ -12,8 +12,8 @@
 #include <cmath>
 
 constexpr int FFT_SIZE = 64;
-constexpr int NUM_ACTIVE = 8;
-constexpr int ACTIVE_BIN_SPACING = FFT_SIZE / NUM_ACTIVE; // = 8
+constexpr int FREQ_BINS = 8;
+constexpr int ACTIVE_BIN_SPACING = FFT_SIZE / FREQ_BINS; // = 8
 
 // Control codes
 constexpr int CTRL_ACCESS_REQUEST = 0; // 00

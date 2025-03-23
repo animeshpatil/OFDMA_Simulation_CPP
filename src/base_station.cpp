@@ -4,30 +4,31 @@
 
 using namespace std;
 
-bool usedBins[NUM_ACTIVE] = { true, true, true, false, false, false, false, false };
-// For each user: (startBin, count)
-std::map<int, std::pair<int,int>> allocation;
+bool usedBins[FREQ_BINS] = { true, true, true, false, false, false, false, false }; // Bin 0 -> CTRL Code, Bin 1 -> DST ID, Bin 2 -> SRC ID
+std::map<int, std::pair<int,int>> allocation; // user -> (start_bin, allocated_bins)
 
-// Allocate up to 3 consecutive bins among active bins [1..7]
 std::pair<int,int> allocateBins(int requested)
 {
     if (requested < 1) requested = 1;
     if (requested > 3) requested = 3;
     int allocated = 0;
     int start = -1;
-    for (int i = 1; i < NUM_ACTIVE; i++)
+	
+    for (int i = 1; i < FREQ_BINS; i++)
 	{
         if (!usedBins[i])
 		{
             bool canAlloc = true;
+			// Checking if there are consecutive bins available
             for (int j = i; j < i + requested; j++)
 			{
-                if (j >= NUM_ACTIVE || usedBins[j])
+                if (j >= FREQ_BINS || usedBins[j])
 				{
                     canAlloc = false;
                     break;
                 }
             }
+			// If bins are available, allocate
             if (canAlloc)
 			{
                 start = i;
@@ -38,18 +39,20 @@ std::pair<int,int> allocateBins(int requested)
             }
         }
     }
+	
+	// If no consecutive bins available, try and assign lower number of bins
     if (allocated == 0)
 	{
         for (int r = requested - 1; r >= 1; r--)
 		{
-            for (int i = 1; i < NUM_ACTIVE; i++)
+            for (int i = 1; i < FREQ_BINS; i++)
 			{
                 if (!usedBins[i])
 				{
                     bool canAlloc = true;
                     for (int j = i; j < i + r; j++)
 					{
-                        if (j >= NUM_ACTIVE || usedBins[j])
+                        if (j >= FREQ_BINS || usedBins[j])
 						{
                             canAlloc = false;
                             break;
@@ -75,9 +78,9 @@ void deallocateBins(int userId)
 {
     if (allocation.find(userId) != allocation.end())
 	{
-        int st = allocation[userId].first;
-        int cnt = allocation[userId].second;
-        for (int i = st; i < st + cnt; i++)
+        int start = allocation[userId].first;
+        int count = allocation[userId].second;
+        for (int i = start; i < start + count; i++)
 		{
             usedBins[i] = false;
         }
@@ -87,7 +90,7 @@ void deallocateBins(int userId)
 
 int main()
 {
-    std::cout << "Base station simulation started (64-point FFT)." << std::endl;
+    std::cout << "Base station simulation started" << std::endl;
     while (true)
 	{
         std::vector<std::complex<double>> rxWave = readWaveform(BS_RX_FILE);
@@ -96,8 +99,8 @@ int main()
             // FFT
             auto fullFreq = fft(rxWave);
             // Extract 8 active subcarriers
-            std::vector<std::complex<double>> active(NUM_ACTIVE);
-            for (int i = 0; i < NUM_ACTIVE; i++)
+            std::vector<std::complex<double>> active(FREQ_BINS);
+            for (int i = 0; i < FREQ_BINS; i++)
 			{
                 active[i] = fullFreq[i * ACTIVE_BIN_SPACING];
             }
@@ -116,7 +119,6 @@ int main()
 
                 std::cout << "Access request from user " << userId << " requesting " << requested << " bins.\n";
                 
-                // --- REWRITTEN WITHOUT STRUCTURED BINDINGS ---
                 std::pair<int,int> allocRes = allocateBins(requested);
                 int st = allocRes.first;
                 int cnt = allocRes.second;
@@ -134,7 +136,7 @@ int main()
 
                 // Build response
                 std::vector<std::complex<double>> respFull(FFT_SIZE, {0,0});
-                std::vector<std::complex<double>> activeResp(NUM_ACTIVE, {0,0});
+                std::vector<std::complex<double>> activeResp(FREQ_BINS, {0,0});
                 // bin0 => response(10)
                 activeResp[0] = qpskModulate(1,0);
                 // bin1 => userId
@@ -148,10 +150,10 @@ int main()
                 activeResp[3] = qpskModulate((hi2>>1)&1, hi2 & 1);
                 activeResp[4] = qpskModulate((lo2>>1)&1, lo2 & 1);
 				
-                for(int i=5; i<NUM_ACTIVE; i++)
+                for(int i=5; i<FREQ_BINS; i++)
                     activeResp[i] = qpskModulate(0,0);
 				
-                for(int i=0; i<NUM_ACTIVE; i++)
+                for(int i=0; i<FREQ_BINS; i++)
                     respFull[i * ACTIVE_BIN_SPACING] = activeResp[i];
 				
                 auto respTime = ifft(respFull);
@@ -172,7 +174,7 @@ int main()
 				auto itSnd = allocation.find(sndId);
 				if (itSnd == allocation.end())
 				{
-					std::cout << "Sender " << sndId << " has no allocation!\n";
+					std::cout << "Sender " << sndId << " has no allocation\n";
 					clearFile(BS_RX_FILE);
 					continue;
 				}
@@ -183,7 +185,7 @@ int main()
 				auto itDst = allocation.find(destId);
 				if (itDst == allocation.end())
 				{
-					std::cout << "Receiver " << destId << " has no allocation! Cannot re-encode data.\n";
+					std::cout << "Receiver " << destId << " has no allocation, Cannot re-encode data.\n";
 					// Optionally, you could auto-allocate bins for the receiver or just drop the data.
 					clearFile(BS_RX_FILE);
 					continue;
@@ -204,7 +206,7 @@ int main()
 
 				// 5) Build a brand-new frequency vector for re-encoding into the receiver's bins
 				std::vector<std::complex<double>> newFull(FFT_SIZE, {0,0});
-				std::vector<std::complex<double>> newActive(NUM_ACTIVE, {0,0});
+				std::vector<std::complex<double>> newActive(FREQ_BINS, {0,0});
 
 				// (a) Bin0 => control code for data (bits=01)
 				newActive[0] = qpskModulate(0,1);
@@ -236,7 +238,7 @@ int main()
 				}
 
 				// (e) Place newActive[] into newFull[]
-				for (int i = 0; i < NUM_ACTIVE; i++)
+				for (int i = 0; i < FREQ_BINS; i++)
 				{
 					newFull[i * ACTIVE_BIN_SPACING] = newActive[i];
 				}
@@ -263,16 +265,16 @@ int main()
 
                 // optional response
                 std::vector<std::complex<double>> respFull(FFT_SIZE, {0,0});
-                std::vector<std::complex<double>> activeResp(NUM_ACTIVE, {0,0});
+                std::vector<std::complex<double>> activeResp(FREQ_BINS, {0,0});
                 activeResp[0] = qpskModulate(1,0); // response
                 activeResp[1] = qpskModulate((uid>>1)&1, uid&1);
                 activeResp[2] = qpskModulate(0,0);
-                for(int i=3; i<NUM_ACTIVE; i++)
+                for(int i=3; i<FREQ_BINS; i++)
 				{
                     activeResp[i] = qpskModulate(0,0);
                 }
 
-                for(int i=0; i<NUM_ACTIVE; i++)
+                for(int i=0; i<FREQ_BINS; i++)
 				{
                     respFull[i*ACTIVE_BIN_SPACING] = activeResp[i];
                 }
