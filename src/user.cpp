@@ -23,28 +23,30 @@ int main(int argc, char* argv[])
     string rxFile="rxbuffer_files/user"+to_string(userId)+"_rx_waveform.txt";
     cout<<"User simulation started. user id="<<userId<<"\n";
 
+	// Message Buffer
     queue<string> msgQueue;
 
     while(true)
 	{
-        // read inbound
         auto rxWave = readWaveform(rxFile);
         if(rxWave.size()==FFT_SIZE)
 		{
-            auto fullFreq = fft(rxWave);
-            vector<std::complex<double>> active(FREQ_BINS);
+            auto fullFreq = fft(rxWave);	// N = 64 fft
+            vector<std::complex<double>> active(FREQ_BINS);		// N = 8 bins
+			
             for(int i=0; i<FREQ_BINS; i++)
 			{
-                active[i] = fullFreq[i*ACTIVE_BIN_SPACING];
+                active[i] = fullFreq[i*FREQ_BIN_SPACING];
             }
-            auto ctrlBits = qpskDemodulate(active[0]);
+			
+			// Extract CTRL Code
+            std::pair<int,int> ctrlBits = qpskDemodulate(active[0]);
             int ctrlVal = ctrlBits.first*2 + ctrlBits.second;
+			
             ostringstream oss;
+			
             if(ctrlVal == CTRL_RESPONSE)
 			{
-                // decode userId, count, start
-                // auto uidB = qpskDemodulate(active[1]);
-                //int respUid = uidB.first*2 + uidB.second;
 
                 auto cB = qpskDemodulate(active[2]);
                 int cnt = cB.first*2 + cB.second;
@@ -125,7 +127,7 @@ int main(int argc, char* argv[])
             }
             for(int i=0; i<FREQ_BINS; i++)
 			{
-                fullFreq[i*ACTIVE_BIN_SPACING] = activeVec[i];
+                fullFreq[i*FREQ_BIN_SPACING] = activeVec[i];
             }
             auto timeSig = ifft(fullFreq);
             addAWGN(timeSig, NOISE_VARIANCE);
@@ -174,7 +176,7 @@ int main(int argc, char* argv[])
 			
             for(int i=0; i<FREQ_BINS; i++)
 			{
-                fullFreq[i*ACTIVE_BIN_SPACING] = activeVec[i];
+                fullFreq[i*FREQ_BIN_SPACING] = activeVec[i];
             }
             auto timeSig = ifft(fullFreq);
             addAWGN(timeSig, NOISE_VARIANCE);
@@ -194,7 +196,7 @@ int main(int argc, char* argv[])
             }
             for(int i=0; i<FREQ_BINS; i++)
 			{
-                fullFreq[i*ACTIVE_BIN_SPACING] = activeVec[i];
+                fullFreq[i*FREQ_BIN_SPACING] = activeVec[i];
             }
             auto timeSig = ifft(fullFreq);
             addAWGN(timeSig, NOISE_VARIANCE);

@@ -17,9 +17,6 @@ std::pair<int,int> qpskDemodulate(const std::complex<double>& sym)
     return {b1,b2};
 }
 
-// Cooley-Tukey FFT: recursively computes the FFT of a vector of complex<double>
-// Input: vector 'a' of size n (n must be a power of 2)
-// Returns: vector containing the FFT of 'a'
 std::vector<std::complex<double>> fft(const std::vector<std::complex<double>>& a)
 {
     int n = a.size();
